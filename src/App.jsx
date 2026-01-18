@@ -1,0 +1,77 @@
+import React, { useState } from 'react';
+import { AppProvider } from './context/AppContext';
+import ProjectList from './components/ProjectList';
+import ProjectEditor from './components/ProjectEditor';
+import Settings from './components/Settings';
+import './App.css';
+
+function App() {
+  const [currentView, setCurrentView] = useState('projects');
+  const [selectedProject, setSelectedProject] = useState(null);
+
+  const handleProjectSelect = (project) => {
+    setSelectedProject(project);
+    setCurrentView('editor');
+  };
+
+  const handleNewProject = () => {
+    setSelectedProject(null);
+    setCurrentView('editor');
+  };
+
+  const handleBackToProjects = () => {
+    setCurrentView('projects');
+    setSelectedProject(null);
+  };
+
+  return (
+    <AppProvider>
+      <div className="app">
+        <header className="app-header">
+          <div className="header-content">
+            <div className="logo-section">
+              <h1 className="app-title">WhitTech Estimator</h1>
+              <span className="app-subtitle">Professional Construction Estimating</span>
+            </div>
+            <nav className="main-nav">
+              <button
+                className={`nav-button ${currentView === 'projects' ? 'active' : ''}`}
+                onClick={() => setCurrentView('projects')}
+              >
+                Projects
+              </button>
+              <button
+                className={`nav-button ${currentView === 'settings' ? 'active' : ''}`}
+                onClick={() => setCurrentView('settings')}
+              >
+                Settings
+              </button>
+            </nav>
+          </div>
+        </header>
+
+        <main className="app-main">
+          {currentView === 'projects' && (
+            <ProjectList
+              onProjectSelect={handleProjectSelect}
+              onNewProject={handleNewProject}
+            />
+          )}
+          
+          {currentView === 'editor' && (
+            <ProjectEditor
+              project={selectedProject}
+              onBack={handleBackToProjects}
+            />
+          )}
+          
+          {currentView === 'settings' && (
+            <Settings />
+          )}
+        </main>
+      </div>
+    </AppProvider>
+  );
+}
+
+export default App;
