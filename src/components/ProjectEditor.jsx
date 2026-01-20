@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import LineItemTable from './LineItemTable';
 import ProposalGenerator from './ProposalGenerator';
@@ -43,7 +43,7 @@ function ProjectEditor({ project, onBack }) {
     setProjectData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
       if (projectId) {
@@ -59,7 +59,7 @@ function ProjectEditor({ project, onBack }) {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [projectId, projectData, dbService, refreshProjects]);
 
   const handleExportExcel = async () => {
     // Note: Excel export requires additional implementation for browser
@@ -72,6 +72,18 @@ function ProjectEditor({ project, onBack }) {
       refreshProjects();
     }
   };
+
+  // Ctrl+S to save
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSave]);
 
   return (
     <div className="project-editor">
@@ -96,7 +108,7 @@ function ProjectEditor({ project, onBack }) {
                 <div className="form-group"><label>Project Number</label><input type="text" name="project_number" value={projectData.project_number} onChange={handleInputChange} readOnly /></div>
                 <div className="form-group"><label>Project Name *</label><input type="text" name="name" value={projectData.name} onChange={handleInputChange} required /></div>
                 <div className="form-group full-width"><label>Description</label><textarea name="description" value={projectData.description} onChange={handleInputChange} rows="3" /></div>
-                <div className="form-group"><label>Status</label><select name="status" value={projectData.status} onChange={handleInputChange}><option value="draft">Draft</option><option value="sent">Sent</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
+                <div className="form-group"><label>Status</label><select name="status" value={projectData.status} onChange={handleInputChange}><option value="draft">Draft</option><option value="sent">Sent</option><option value="approved">Approved</option><option value="won">Won</option><option value="lost">Lost</option><option value="rejected">Rejected</option></select></div>
               </div>
             </div>
             <div className="form-section">

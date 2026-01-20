@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Search, Trash2, Edit, DollarSign, Calendar } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, DollarSign, Calendar, Copy } from 'lucide-react';
 
 function ProjectList({ onProjectSelect, onNewProject }) {
   const { projects, refreshProjects, dbService } = useApp();
@@ -22,8 +22,51 @@ function ProjectList({ onProjectSelect, onNewProject }) {
     }
   };
 
+  const handleClone = async (e, project) => {
+    e.stopPropagation();
+    try {
+      // Create new project with copied data
+      const newProjectData = {
+        ...project,
+        name: `${project.name} (Copy)`,
+        status: 'draft',
+        project_number: `EST-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
+      };
+      delete newProjectData.id;
+      delete newProjectData.date_created;
+      delete newProjectData.date_modified;
+
+      const newId = await dbService.createProject(newProjectData);
+
+      // Clone line items
+      const lineItems = dbService.getLineItems(project.id);
+      for (const item of lineItems) {
+        await dbService.createLineItem({
+          ...item,
+          project_id: newId,
+          id: undefined
+        });
+      }
+
+      await refreshProjects();
+      alert('Project cloned successfully!');
+    } catch (err) {
+      alert('Error cloning project: ' + err.message);
+    }
+  };
+
   const formatCurrency = (amount) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'won': return 'won';
+      case 'lost': return 'lost';
+      case 'approved': return 'approved';
+      case 'sent': return 'sent';
+      default: return 'draft';
+    }
+  };
 
   return (
     <div className="project-list-container">
@@ -39,7 +82,7 @@ function ProjectList({ onProjectSelect, onNewProject }) {
           <input type="text" placeholder="Search projects..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <div className="filter-buttons">
-          {['all', 'draft', 'sent', 'approved'].map(f => (
+          {['all', 'draft', 'sent', 'approved', 'won', 'lost'].map(f => (
             <button key={f} className={`filter-btn ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
@@ -57,7 +100,7 @@ function ProjectList({ onProjectSelect, onNewProject }) {
             <div key={project.id} className="project-card" onClick={() => onProjectSelect(project)}>
               <div className="project-card-header">
                 <h3>{project.name}</h3>
-                <span className={`status-badge ${project.status}`}>{project.status}</span>
+                <span className={`status-badge ${getStatusColor(project.status)}`}>{project.status}</span>
               </div>
               <div className="project-card-body">
                 <div className="project-info"><span className="info-label">Client:</span><span className="info-value">{project.client_name || 'N/A'}</span></div>
@@ -65,6 +108,7 @@ function ProjectList({ onProjectSelect, onNewProject }) {
                 <div className="project-total"><DollarSign size={16} /><span className="total-amount">{formatCurrency(project.total_amount)}</span></div>
               </div>
               <div className="project-card-actions">
+                <button className="icon-btn" onClick={(e) => handleClone(e, project)} title="Clone Project"><Copy size={18} /></button>
                 <button className="icon-btn" onClick={(e) => { e.stopPropagation(); onProjectSelect(project); }} title="Edit"><Edit size={18} /></button>
                 <button className="icon-btn danger" onClick={(e) => handleDelete(e, project.id)} title="Delete"><Trash2 size={18} /></button>
               </div>
