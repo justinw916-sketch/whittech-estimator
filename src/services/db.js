@@ -27,6 +27,9 @@ export const dbService = {
                 this.seedData();
             }
 
+            // Run 2025 Spec Migration on every load ensuring schema is up to date
+            this.migrateSpecs2025();
+
             return db;
         } catch (err) {
             console.error('Failed to initialize database:', err);
@@ -447,8 +450,8 @@ export const dbService = {
     async createLineItem(lineItemData) {
         const sql = `
       INSERT INTO line_items (project_id, category, description, quantity, unit,
-                             material_cost, labor_hours, labor_rate, markup_percent, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             material_cost, labor_hours, labor_rate, markup_percent, notes, spec_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
         db.run(sql, [
             lineItemData.project_id,
@@ -460,7 +463,8 @@ export const dbService = {
             lineItemData.labor_hours || 0,
             lineItemData.labor_rate || 75,
             lineItemData.markup_percent || 20,
-            lineItemData.notes || null
+            lineItemData.notes || null,
+            lineItemData.spec_url || null
         ]);
         const result = this.queryOne('SELECT last_insert_rowid() as id');
         await this.save();
@@ -476,7 +480,7 @@ export const dbService = {
       UPDATE line_items 
       SET category = ?, description = ?, quantity = ?, unit = ?,
           material_cost = ?, labor_hours = ?, labor_rate = ?, 
-          markup_percent = ?, notes = ?
+          markup_percent = ?, notes = ?, spec_url = ?
       WHERE id = ?
     `;
         db.run(sql, [
@@ -489,6 +493,7 @@ export const dbService = {
             lineItemData.labor_rate || 75,
             lineItemData.markup_percent || 20,
             lineItemData.notes || null,
+            lineItemData.spec_url || null,
             id
         ]);
         await this.save();
@@ -524,8 +529,8 @@ export const dbService = {
     async addToMaterialsLibrary(materialData) {
         const sql = `
       INSERT INTO materials_library (category, item_name, description, unit,
-                                    material_cost, typical_labor_hours, manufacturer, part_number)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                    material_cost, typical_labor_hours, manufacturer, part_number, spec_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
         db.run(sql, [
             materialData.category || null,
@@ -535,7 +540,8 @@ export const dbService = {
             materialData.material_cost || 0,
             materialData.typical_labor_hours || 0,
             materialData.manufacturer || null,
-            materialData.part_number || null
+            materialData.part_number || null,
+            materialData.spec_url || null
         ]);
         await this.save();
         return true;
@@ -618,5 +624,41 @@ export const dbService = {
         }
         stmt.free();
         return result;
+    },
+
+    // ========== Migrations ==========
+
+    migrateSpecs2025() {
+        console.log('Checking for 2025 Spec URL schema updates...');
+
+        try {
+            // Check materials_library
+            const matInfo = db.exec("PRAGMA table_info(materials_library)");
+            const matColumns = matInfo[0].values.map(c => c[1]);
+            if (!matColumns.includes('spec_url')) {
+                console.log('Adding spec_url to materials_library...');
+                db.run("ALTER TABLE materials_library ADD COLUMN spec_url TEXT");
+            }
+
+            // Check line_items
+            const lineInfo = db.exec("PRAGMA table_info(line_items)");
+            const lineColumns = lineInfo[0].values.map(c => c[1]);
+            if (!lineColumns.includes('spec_url')) {
+                console.log('Adding spec_url to line_items...');
+                db.run("ALTER TABLE line_items ADD COLUMN spec_url TEXT");
+            }
+
+            // Update some seed data with dummy specs if they are empty
+            const hasSpecs = this.queryOne("SELECT COUNT(*) as count FROM materials_library WHERE spec_url IS NOT NULL");
+            if (hasSpecs.count === 0) {
+                console.log('Seeding example spec URLs...');
+                db.run("UPDATE materials_library SET spec_url = 'https://www.example.com/spec-sheet.pdf' WHERE item_name LIKE '%Cat6%'");
+                db.run("UPDATE materials_library SET spec_url = 'https://www.example.com/camera-spec.pdf' WHERE category = 'Video Surveillance'");
+            }
+
+            this.save();
+        } catch (err) {
+            console.error('Migration failed:', err);
+        }
     }
 };

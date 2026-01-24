@@ -1057,3 +1057,190 @@
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
+
+/* Material Sidebar */
+.material-sidebar {
+  width: 350px;
+  border-left: 2px solid var(--border-color);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: sticky;
+  top: 0;
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.sidebar-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.sidebar-search {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper .search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.search-input-wrapper input {
+  width: 100%;
+  padding: 0.5rem 0.5rem 0.5rem 2.25rem;
+  background: var(--background);
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.search-input-wrapper input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.sidebar-categories {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border-color);
+  scrollbar-width: thin;
+}
+
+.category-chip {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  background: var(--surface-light);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.category-chip:hover {
+  border-color: var(--primary-color);
+}
+
+.category-chip.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.sidebar-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.material-card {
+  background: var(--surface-light);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  transition: all 0.2s;
+}
+
+.material-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.material-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.material-header h4 {
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 600;
+  flex: 1;
+  padding-right: 0.5rem;
+}
+
+.material-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.material-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.material-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  align-items: center;
+}
+
+.material-meta .price {
+  color: var(--success);
+}
+
+.material-meta .unit {
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+/* Update main layout to accommodate sidebar */
+.project-editor {
+  display: flex;
+  flex-direction: row;
+  /* Changed from column to row */
+  gap: 0;
+  /* Remove gap as sidebar has border */
+  height: calc(100vh - 80px);
+  /* Adjust based on header height */
+  overflow: hidden;
+}
+
+.editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 2rem;
+  gap: 2rem;
+}
+
+.project-editor.sidebar-open .editor-main {
+  margin-right: 0;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Trash2, Copy, Search } from 'lucide-react';
+import { Plus, Trash2, Copy, Search, FileText } from 'lucide-react';
 import QuickAdd from './QuickAdd';
 
 function LineItemTable({ projectId, lineItems, onRefresh }) {
@@ -37,6 +37,7 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
   const columns = [
     { key: 'category', label: 'Category', type: 'select', width: '140px' },
     { key: 'description', label: 'Description', type: 'text', width: '200px' },
+    { key: 'spec_url', label: 'Spec', type: 'link', width: '50px' },
     { key: 'quantity', label: 'Qty', type: 'number', width: '70px', step: '0.01' },
     { key: 'unit', label: 'Unit', type: 'select', width: '70px' },
     { key: 'material_cost', label: 'Material $', type: 'number', width: '100px', step: '0.01' },
@@ -297,6 +298,27 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
         >
           {units.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
+      );
+    }
+
+    if (col.type === 'link') {
+      return (
+        <div className="cell-input" style={{ textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          {row.spec_url ? (
+            <a
+              href={row.spec_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View Spec"
+              style={{ color: 'var(--primary-color)', display: 'flex' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <FileText size={16} />
+            </a>
+          ) : (
+            <span style={{ opacity: 0.2 }}><FileText size={16} /></span>
+          )}
+        </div>
       );
     }
 
