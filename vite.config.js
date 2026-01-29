@@ -8,6 +8,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+          'vendor-db': ['sql.js'],
+          'vendor-ui': ['lucide-react'],
+        },
+      },
+    },
   },
   server: {
     port: 5175,
