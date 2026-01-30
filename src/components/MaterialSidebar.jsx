@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Search, X, FileText, Plus, Database } from 'lucide-react';
+import { Search, X, Plus, Database } from 'lucide-react';
 
 function MaterialSidebar({ isOpen, onClose, onSelectMaterial }) {
     const { dbService } = useApp();
@@ -75,17 +75,6 @@ function MaterialSidebar({ isOpen, onClose, onSelectMaterial }) {
                             <div className="material-header">
                                 <h4>{material.item_name}</h4>
                                 <div className="material-actions">
-                                    {material.spec_url && (
-                                        <a
-                                            href={material.spec_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="icon-btn small"
-                                            title="View Datasheet"
-                                        >
-                                            <FileText size={16} />
-                                        </a>
-                                    )}
                                     <button
                                         className="icon-btn success small"
                                         onClick={() => onSelectMaterial(material)}

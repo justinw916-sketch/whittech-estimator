@@ -568,6 +568,65 @@ export const dbService = {
         );
     },
 
+    async updateMaterialInLibrary(id, materialData) {
+        const sql = `
+      UPDATE materials_library 
+      SET category = ?, item_name = ?, description = ?, unit = ?,
+          material_cost = ?, typical_labor_hours = ?, manufacturer = ?, 
+          part_number = ?, last_updated = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `;
+        db.run(sql, [
+            materialData.category || null,
+            materialData.item_name,
+            materialData.description || null,
+            materialData.unit || 'EA',
+            materialData.material_cost || 0,
+            materialData.typical_labor_hours || 0,
+            materialData.manufacturer || null,
+            materialData.part_number || null,
+            id
+        ]);
+        await this.save();
+        return true;
+    },
+
+    async deleteMaterialFromLibrary(id) {
+        db.run('DELETE FROM materials_library WHERE id = ?', [id]);
+        await this.save();
+        return true;
+    },
+
+    getAllMaterialsForExport() {
+        return this.queryAll('SELECT category, item_name, description, unit, material_cost, typical_labor_hours, manufacturer, part_number FROM materials_library ORDER BY category, item_name');
+    },
+
+    async bulkImportMaterials(materials) {
+        let imported = 0;
+        for (const mat of materials) {
+            try {
+                db.run(`INSERT INTO materials_library 
+                    (category, item_name, description, unit, material_cost, typical_labor_hours, manufacturer, part_number) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        mat.category || 'General / Misc',
+                        mat.item_name || mat.name || 'Unnamed Item',
+                        mat.description || '',
+                        mat.unit || 'EA',
+                        parseFloat(mat.material_cost) || 0,
+                        parseFloat(mat.typical_labor_hours) || 0,
+                        mat.manufacturer || null,
+                        mat.part_number || null
+                    ]);
+                imported++;
+            } catch (e) {
+                console.warn('Failed to import material:', mat, e);
+            }
+        }
+        await this.save();
+        return imported;
+    },
+
     // ========== Categories ==========
 
     getCategories() {
