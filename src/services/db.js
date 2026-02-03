@@ -1,8 +1,14 @@
 import initSqlJs from 'sql.js';
 import localforage from 'localforage';
+import { loadFromCloud, saveToCloud, base64ToUint8Array } from './cloudSync';
 
 let db = null;
 const DB_NAME = 'whittech-estimator.db';
+
+// Cloud sync state
+let cloudSyncEnabled = true;
+let cloudSaveTimeout = null;
+const CLOUD_SAVE_DEBOUNCE = 2000; // 2 seconds
 
 export const dbService = {
     async init() {
@@ -13,18 +19,43 @@ export const dbService = {
                 locateFile: file => `./${file}`
             });
 
-            const savedDb = await localforage.getItem(DB_NAME);
+            // Try cloud storage first
+            let loadedFromCloud = false;
+            if (cloudSyncEnabled) {
+                try {
+                    const cloudData = await loadFromCloud();
+                    if (cloudData?.database) {
+                        const dbBytes = base64ToUint8Array(cloudData.database);
+                        db = new SQL.Database(dbBytes);
+                        console.log('✓ Loaded database from cloud storage');
+                        loadedFromCloud = true;
+                        // Run migrations for cloud-loaded databases
+                        this.migrateData();
+                    }
+                } catch (cloudError) {
+                    console.warn('Cloud load failed, falling back to local:', cloudError.message);
+                }
+            }
 
-            if (savedDb) {
-                db = new SQL.Database(new Uint8Array(savedDb));
-                console.log('Loaded existing database from IndexedDB');
-                // Run migrations for existing databases
-                this.migrateData();
-            } else {
-                db = new SQL.Database();
-                console.log('Created new in-memory database');
-                this.initSchema();
-                this.seedData();
+            // Fall back to local IndexedDB
+            if (!loadedFromCloud) {
+                const savedDb = await localforage.getItem(DB_NAME);
+
+                if (savedDb) {
+                    db = new SQL.Database(new Uint8Array(savedDb));
+                    console.log('Loaded database from IndexedDB (local)');
+                    // Run migrations for existing databases
+                    this.migrateData();
+                    // Sync local to cloud on first opportunity
+                    if (cloudSyncEnabled) {
+                        this.saveToCloudDebounced();
+                    }
+                } else {
+                    db = new SQL.Database();
+                    console.log('Created new database');
+                    this.initSchema();
+                    this.seedData();
+                }
             }
 
             // Run 2025 Spec Migration on every load ensuring schema is up to date
@@ -36,6 +67,7 @@ export const dbService = {
             throw err;
         }
     },
+
 
     migrateData() {
         // Check for old categories to trigger migration
@@ -179,8 +211,30 @@ export const dbService = {
     async save() {
         if (!db) return;
         const data = db.export();
+        // Always save to IndexedDB (local backup)
         await localforage.setItem(DB_NAME, data);
+        // Also sync to cloud (debounced)
+        if (cloudSyncEnabled) {
+            this.saveToCloudDebounced();
+        }
     },
+
+    // Debounced cloud save to avoid excessive API calls
+    saveToCloudDebounced() {
+        if (cloudSaveTimeout) {
+            clearTimeout(cloudSaveTimeout);
+        }
+        cloudSaveTimeout = setTimeout(async () => {
+            if (!db) return;
+            try {
+                const data = db.export();
+                await saveToCloud(data);
+            } catch (error) {
+                console.warn('Cloud sync failed:', error.message);
+            }
+        }, CLOUD_SAVE_DEBOUNCE);
+    },
+
 
     initSchema() {
         const schema = `
