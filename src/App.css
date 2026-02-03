@@ -90,6 +90,45 @@
   border-color: var(--primary-color);
 }
 
+/* Fullscreen Button */
+.fullscreen-btn {
+  padding: 0.6rem !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.fullscreen-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.fullscreen-btn:hover {
+  background: var(--primary-color);
+  color: white;
+}
+
+/* Fullscreen Mode */
+.app.fullscreen-mode {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  overflow: auto;
+}
+
+.app.fullscreen-mode .app-main {
+  max-width: 100%;
+  padding: 1.5rem 2rem;
+}
+
+.app.fullscreen-mode .header-content {
+  max-width: 100%;
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;
@@ -434,7 +473,8 @@
   padding: 2rem;
   flex: 1;
   overflow-y: auto;
-  min-height: 0; /* Allow flex child to shrink and enable scrolling */
+  min-height: 0;
+  /* Allow flex child to shrink and enable scrolling */
 }
 
 .project-details-form {
@@ -1428,7 +1468,8 @@
   overflow: hidden;
   padding: 2rem;
   gap: 1rem;
-  min-height: 0; /* Allow flex child to shrink below content size */
+  min-height: 0;
+  /* Allow flex child to shrink below content size */
 }
 
 .project-editor.sidebar-open .editor-main {
