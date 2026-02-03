@@ -10,7 +10,7 @@ export const dbService = {
 
         try {
             const SQL = await initSqlJs({
-                locateFile: file => `/${file}`
+                locateFile: file => `./${file}`
             });
 
             const savedDb = await localforage.getItem(DB_NAME);

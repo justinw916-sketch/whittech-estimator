@@ -432,6 +432,9 @@
   border: 2px solid var(--border-color);
   border-radius: 12px;
   padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* Allow flex child to shrink and enable scrolling */
 }
 
 .project-details-form {
@@ -1424,7 +1427,8 @@
   flex-direction: column;
   overflow: hidden;
   padding: 2rem;
-  gap: 2rem;
+  gap: 1rem;
+  min-height: 0; /* Allow flex child to shrink below content size */
 }
 
 .project-editor.sidebar-open .editor-main {
