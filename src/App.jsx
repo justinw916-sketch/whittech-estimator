@@ -10,7 +10,7 @@ function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Theme state with persistence
+  // Theme state with persistence (only affects main content, not header)
   const [theme, setTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('estimator-theme') || 'dark';
@@ -18,9 +18,8 @@ function App() {
     return 'dark';
   });
 
-  // Apply theme to document
+  // Persist theme preference
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('estimator-theme', theme);
   }, [theme]);
 
@@ -96,7 +95,7 @@ function App() {
               >
                 Settings
               </button>
-              {/* Theme Toggle Button */}
+              {/* Theme Toggle Button - between Settings and Fullscreen */}
               <button
                 className="nav-button theme-toggle-btn"
                 onClick={toggleTheme}
@@ -139,7 +138,8 @@ function App() {
           </div>
         </header>
 
-        <main className="app-main">
+        {/* Main content area - only this gets themed */}
+        <main className={`app-main ${theme === 'light' ? 'light-theme' : ''}`}>
           {currentView === 'projects' && (
             <ProjectList
               onProjectSelect={handleProjectSelect}

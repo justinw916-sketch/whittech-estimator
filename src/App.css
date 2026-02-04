@@ -148,6 +148,137 @@
   max-width: 100%;
 }
 
+/* ========================================
+   LIGHT THEME - Only affects main content
+   ======================================== */
+.app-main.light-theme {
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-light: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --border-color: #e2e8f0;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.15);
+
+  background: var(--background);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light theme overrides for nested elements */
+.app-main.light-theme .project-card,
+.app-main.light-theme .editor-content,
+.app-main.light-theme .settings-container,
+.app-main.light-theme .form-group input,
+.app-main.light-theme .form-group textarea,
+.app-main.light-theme .form-group select,
+.app-main.light-theme .search-box,
+.app-main.light-theme .table-container,
+.app-main.light-theme .line-items-table {
+  background: var(--surface);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .form-group input,
+.app-main.light-theme .form-group textarea,
+.app-main.light-theme .form-group select {
+  background: var(--surface-light);
+}
+
+.app-main.light-theme .search-box input {
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .search-box input::placeholder {
+  color: var(--text-secondary);
+}
+
+.app-main.light-theme .filter-btn {
+  background: var(--surface);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.app-main.light-theme .filter-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .filter-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.app-main.light-theme .list-header h2,
+.app-main.light-theme .form-section h3,
+.app-main.light-theme .project-card-header h3 {
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .line-items-table thead {
+  background: var(--surface-light);
+}
+
+.app-main.light-theme .line-items-table th {
+  color: var(--primary-color);
+  border-color: var(--border-color);
+}
+
+.app-main.light-theme .line-items-table td {
+  border-color: var(--border-color);
+}
+
+.app-main.light-theme .line-items-table .row-num {
+  background: var(--surface-light);
+  color: var(--text-secondary);
+}
+
+.app-main.light-theme .line-items-table .cell-input {
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .line-items-table .cell-input:focus {
+  background: var(--surface);
+}
+
+.app-main.light-theme .line-items-table tfoot {
+  background: var(--surface-light);
+}
+
+.app-main.light-theme .btn-secondary {
+  background: var(--surface-light);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.app-main.light-theme .icon-btn {
+  color: var(--text-secondary);
+}
+
+.app-main.light-theme .icon-btn:hover {
+  background: var(--surface-light);
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .tab {
+  color: var(--text-secondary);
+}
+
+.app-main.light-theme .tab:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.app-main.light-theme .tab.active {
+  color: var(--primary-color);
+}
+
+.app-main.light-theme .editor-tabs {
+  border-color: var(--border-color);
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;
