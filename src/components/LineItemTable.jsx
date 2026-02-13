@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Trash2, Copy, Search, FileText } from 'lucide-react';
+import { Plus, Trash2, Copy, Search, FileText, Eraser } from 'lucide-react';
 import QuickAdd from './QuickAdd';
 
 function LineItemTable({ projectId, lineItems, onRefresh, projectData }) {
@@ -228,6 +228,20 @@ function LineItemTable({ projectId, lineItems, onRefresh, projectData }) {
     setRows([...rows, ...newRows]);
   };
 
+  const handleClearAll = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL line items? This cannot be undone.')) return;
+    // Delete all saved rows from DB
+    for (const row of rows) {
+      if (!row.isNew) {
+        try { await dbService.deleteLineItem(row.id); } catch (e) { console.error(e); }
+      }
+    }
+    // Reset to 20 empty rows
+    const emptyRows = Array.from({ length: 20 }, (_, i) => createEmptyRow(i));
+    setRows(emptyRows);
+    onRefresh();
+  };
+
   // Handle material selection from QuickAdd
   const handleMaterialSelect = async (rowIndex, material) => {
     const newRows = [...rows];
@@ -431,6 +445,9 @@ function LineItemTable({ projectId, lineItems, onRefresh, projectData }) {
       <div className="line-items-header">
         <h3>Line Items <span className="row-count">({rows.filter(r => r.description).length} items)</span></h3>
         <div className="header-actions">
+          <button className="btn btn-danger" onClick={handleClearAll} title="Clear all line items">
+            <Eraser size={16} /> Clear Form
+          </button>
           <button className="btn btn-secondary" onClick={() => { setQuickAddTargetRow(focusedCell.row); setQuickAddOpen(true); }}>
             <Search size={16} /> Quick Add (Ctrl+K)
           </button>

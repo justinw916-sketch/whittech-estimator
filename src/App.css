@@ -326,6 +326,17 @@
   background: var(--surface);
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  border: 2px solid var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: transparent;
+  color: var(--danger);
+}
+
 .btn-large {
   padding: 1rem 2rem;
   font-size: 1.125rem;
@@ -880,6 +891,7 @@
   font-weight: 600;
   position: sticky;
   bottom: 0;
+  z-index: 10;
 }
 
 .line-items-table tfoot td {
