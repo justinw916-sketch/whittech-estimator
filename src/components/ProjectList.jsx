@@ -41,11 +41,8 @@ function ProjectList({ onProjectSelect, onNewProject }) {
       // Clone line items
       const lineItems = dbService.getLineItems(project.id);
       for (const item of lineItems) {
-        await dbService.createLineItem({
-          ...item,
-          project_id: newId,
-          id: undefined
-        });
+        const { id: _id, sort_order: _so, ...itemData } = item;
+        await dbService.createLineItem({ ...itemData, project_id: newId });
       }
 
       await refreshProjects();

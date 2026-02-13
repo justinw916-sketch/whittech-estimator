@@ -10,7 +10,9 @@ function ProjectEditor({ project, onBack }) {
   const { refreshProjects, companySettings, dbService } = useApp();
   const [projectData, setProjectData] = useState({
     project_number: '', name: '', client_name: '', client_company: '', client_email: '',
-    client_phone: '', client_address: '', description: '', status: 'draft', notes: ''
+    client_phone: '', client_address: '', description: '', status: 'draft', notes: '',
+    material_tax_rate: companySettings?.default_material_tax_rate || 0,
+    contingency_pct: 5
   });
   const [lineItems, setLineItems] = useState([]);
   const [activeTab, setActiveTab] = useState('details');
@@ -43,7 +45,13 @@ function ProjectEditor({ project, onBack }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setProjectData(prev => ({ ...prev, [name]: value }));
+    const numericFields = ['material_tax_rate', 'contingency_pct'];
+    if (numericFields.includes(name)) {
+      // Allow empty string for editing, parse on save
+      setProjectData(prev => ({ ...prev, [name]: value === '' ? '' : (parseFloat(value) || 0) }));
+    } else {
+      setProjectData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSave = useCallback(async () => {
@@ -51,9 +59,11 @@ function ProjectEditor({ project, onBack }) {
     try {
       if (projectId) {
         await dbService.updateProject(projectId, projectData);
+        await dbService.calculateProjectTotal(projectId);
       } else {
         const newId = await dbService.createProject(projectData);
         setProjectId(newId);
+        await dbService.calculateProjectTotal(newId);
       }
       await refreshProjects();
       alert('Project saved successfully!');
@@ -73,10 +83,14 @@ function ProjectEditor({ project, onBack }) {
     try {
       // Prepare data for export
       const data = lineItems.map(item => {
-        const materialTotal = item.quantity * item.material_cost;
-        const laborTotal = item.quantity * item.labor_hours * item.labor_rate;
-        const subtotal = materialTotal + laborTotal;
-        const total = subtotal * (1 + item.markup_percent / 100);
+        const matBase = item.quantity * item.material_cost;
+        const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+        const labBase = item.quantity * item.labor_hours * item.labor_rate;
+        const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+        const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+        const oh = subtotal * ((item.overhead_pct || 0) / 100);
+        const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+        const total = subtotal + oh + pft;
 
         return {
           Category: item.category,
@@ -84,9 +98,12 @@ function ProjectEditor({ project, onBack }) {
           Quantity: item.quantity,
           Unit: item.unit,
           'Material Cost': item.material_cost,
+          'Mat Markup %': item.material_markup_pct || 0,
           'Labor Hours': item.labor_hours,
           'Labor Rate': item.labor_rate,
-          'Markup %': item.markup_percent,
+          'Lab Markup %': item.labor_markup_pct || 0,
+          'OH %': item.overhead_pct || 0,
+          'Profit %': item.profit_pct || 0,
           Total: total
         };
       });
@@ -142,6 +159,10 @@ function ProjectEditor({ project, onBack }) {
             labor_hours: parseFloat(row['Labor Hours'] || row['Labor'] || row['labor'] || 0) || 0,
             labor_rate: parseFloat(row['Labor Rate'] || row['Rate'] || row['rate'] || companySettings?.default_labor_rate || 75) || 75,
             markup_percent: parseFloat(row['Markup %'] || row['Markup'] || row['markup'] || companySettings?.default_markup_percent || 20) || 20,
+            material_markup_pct: parseFloat(row['Mat Markup %'] || row['Material Markup %'] || companySettings?.default_material_markup_pct || 0),
+            labor_markup_pct: parseFloat(row['Lab Markup %'] || row['Labor Markup %'] || companySettings?.default_labor_markup_pct || 0),
+            overhead_pct: parseFloat(row['OH %'] || row['Overhead %'] || (companySettings?.default_overhead_pct ?? 10)),
+            profit_pct: parseFloat(row['Profit %'] || (companySettings?.default_profit_pct ?? 10)),
             notes: row['Notes'] || row['notes'] || ''
           };
 
@@ -204,6 +225,10 @@ function ProjectEditor({ project, onBack }) {
           labor_hours: material.typical_labor_hours,
           labor_rate: companySettings?.default_labor_rate || 75,
           markup_percent: companySettings?.default_markup_percent || 20,
+          material_markup_pct: companySettings?.default_material_markup_pct || 0,
+          labor_markup_pct: companySettings?.default_labor_markup_pct || 0,
+          overhead_pct: companySettings?.default_overhead_pct ?? 10,
+          profit_pct: companySettings?.default_profit_pct ?? 10,
           spec_url: material.spec_url || null
         });
         refreshLineItems();
@@ -261,9 +286,22 @@ function ProjectEditor({ project, onBack }) {
                 <h3>Additional Notes</h3>
                 <div className="form-group"><textarea name="notes" value={projectData.notes} onChange={handleInputChange} rows="4" /></div>
               </div>
+              <div className="form-section">
+                <h3>Pricing & Tax</h3>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Material Sales Tax %</label>
+                    <input type="number" name="material_tax_rate" value={projectData.material_tax_rate || 0} onChange={handleInputChange} step="0.01" min="0" />
+                  </div>
+                  <div className="form-group">
+                    <label>Contingency %</label>
+                    <input type="number" name="contingency_pct" value={projectData.contingency_pct || 0} onChange={handleInputChange} step="1" min="0" />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-          {activeTab === 'lineitems' && projectId && <LineItemTable projectId={projectId} lineItems={lineItems} onRefresh={refreshLineItems} />}
+          {activeTab === 'lineitems' && projectId && <LineItemTable projectId={projectId} lineItems={lineItems} onRefresh={refreshLineItems} projectData={projectData} />}
           {activeTab === 'proposal' && projectId && <ProposalGenerator projectId={projectId} projectData={projectData} lineItems={lineItems} />}
         </div>
       </div>

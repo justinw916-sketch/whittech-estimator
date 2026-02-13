@@ -60,6 +60,8 @@ export const dbService = {
 
             // Run 2025 Spec Migration on every load ensuring schema is up to date
             this.migrateSpecs2025();
+            // Run granular pricing migration
+            this.migrateGranularPricing();
 
             return db;
         } catch (err) {
@@ -299,6 +301,11 @@ export const dbService = {
         logo_path TEXT,
         default_labor_rate REAL DEFAULT 75,
         default_markup_percent REAL DEFAULT 20,
+        default_material_markup_pct REAL DEFAULT 0,
+        default_labor_markup_pct REAL DEFAULT 0,
+        default_overhead_pct REAL DEFAULT 10,
+        default_profit_pct REAL DEFAULT 10,
+        default_material_tax_rate REAL DEFAULT 0,
         tax_rate REAL DEFAULT 0,
         proposal_terms TEXT DEFAULT 'Payment due within 30 days. 50% deposit required to commence work.'
       );
@@ -440,8 +447,9 @@ export const dbService = {
     async createProject(projectData) {
         const sql = `
       INSERT INTO projects (project_number, name, client_name, client_company, 
-                           client_email, client_phone, client_address, description, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           client_email, client_phone, client_address, description, notes,
+                           material_tax_rate, contingency_pct)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
         db.run(sql, [
             projectData.project_number || null,
@@ -452,7 +460,9 @@ export const dbService = {
             projectData.client_phone || null,
             projectData.client_address || null,
             projectData.description || null,
-            projectData.notes || null
+            projectData.notes || null,
+            projectData.material_tax_rate ?? 0,
+            projectData.contingency_pct ?? 5
         ]);
         const result = this.queryOne('SELECT last_insert_rowid() as id');
         await this.save();
@@ -470,12 +480,14 @@ export const dbService = {
     async updateProject(id, projectData) {
         const sql = `
       UPDATE projects 
-      SET name = ?, client_name = ?, client_company = ?, client_email = ?, 
+      SET project_number = ?, name = ?, client_name = ?, client_company = ?, client_email = ?, 
           client_phone = ?, client_address = ?, description = ?, notes = ?,
-          status = ?, date_modified = CURRENT_TIMESTAMP
+          status = ?, material_tax_rate = ?, contingency_pct = ?,
+          date_modified = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
         db.run(sql, [
+            projectData.project_number || null,
             projectData.name,
             projectData.client_name || null,
             projectData.client_company || null,
@@ -485,6 +497,8 @@ export const dbService = {
             projectData.description || null,
             projectData.notes || null,
             projectData.status || 'draft',
+            projectData.material_tax_rate ?? 0,
+            projectData.contingency_pct ?? 0,
             id
         ]);
         await this.save();
@@ -504,25 +518,31 @@ export const dbService = {
     async createLineItem(lineItemData) {
         const sql = `
       INSERT INTO line_items (project_id, category, description, quantity, unit,
-                             material_cost, labor_hours, labor_rate, markup_percent, notes, spec_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             material_cost, labor_hours, labor_rate, markup_percent,
+                             material_markup_pct, labor_markup_pct, overhead_pct, profit_pct,
+                             notes, spec_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
         db.run(sql, [
             lineItemData.project_id,
             lineItemData.category || null,
             lineItemData.description,
-            lineItemData.quantity || 1,
+            lineItemData.quantity ?? 1,
             lineItemData.unit || 'EA',
-            lineItemData.material_cost || 0,
-            lineItemData.labor_hours || 0,
-            lineItemData.labor_rate || 75,
-            lineItemData.markup_percent || 20,
+            lineItemData.material_cost ?? 0,
+            lineItemData.labor_hours ?? 0,
+            lineItemData.labor_rate ?? 75,
+            lineItemData.markup_percent ?? 20,
+            lineItemData.material_markup_pct ?? 0,
+            lineItemData.labor_markup_pct ?? 0,
+            lineItemData.overhead_pct ?? 10,
+            lineItemData.profit_pct ?? 10,
             lineItemData.notes || null,
             lineItemData.spec_url || null
         ]);
         const result = this.queryOne('SELECT last_insert_rowid() as id');
         await this.save();
-        return result.id;
+        return { success: true, lineItem: { id: result.id } };
     },
 
     getLineItems(projectId) {
@@ -534,18 +554,25 @@ export const dbService = {
       UPDATE line_items 
       SET category = ?, description = ?, quantity = ?, unit = ?,
           material_cost = ?, labor_hours = ?, labor_rate = ?, 
-          markup_percent = ?, notes = ?, spec_url = ?
+          markup_percent = ?,
+          material_markup_pct = ?, labor_markup_pct = ?,
+          overhead_pct = ?, profit_pct = ?,
+          notes = ?, spec_url = ?
       WHERE id = ?
     `;
         db.run(sql, [
             lineItemData.category || null,
             lineItemData.description,
-            lineItemData.quantity || 1,
+            lineItemData.quantity ?? 1,
             lineItemData.unit || 'EA',
-            lineItemData.material_cost || 0,
-            lineItemData.labor_hours || 0,
-            lineItemData.labor_rate || 75,
-            lineItemData.markup_percent || 20,
+            lineItemData.material_cost ?? 0,
+            lineItemData.labor_hours ?? 0,
+            lineItemData.labor_rate ?? 75,
+            lineItemData.markup_percent ?? 20,
+            lineItemData.material_markup_pct ?? 0,
+            lineItemData.labor_markup_pct ?? 0,
+            lineItemData.overhead_pct ?? 10,
+            lineItemData.profit_pct ?? 10,
             lineItemData.notes || null,
             lineItemData.spec_url || null,
             id
@@ -562,20 +589,36 @@ export const dbService = {
 
     async calculateProjectTotal(projectId) {
         const lineItems = this.getLineItems(projectId);
+        const project = this.getProject(projectId);
+        const taxRate = (project?.material_tax_rate ?? 0) / 100;
+        const contingencyPct = (project?.contingency_pct ?? 0) / 100;
 
-        let total = 0;
+        let totalMaterialWithMarkup = 0;
+        let grandTotal = 0;
         lineItems.forEach(item => {
-            const materialTotal = item.quantity * item.material_cost;
-            const laborTotal = item.quantity * item.labor_hours * item.labor_rate;
+            const matBase = (item.quantity ?? 0) * (item.material_cost ?? 0);
+            const matMarkup = matBase * ((item.material_markup_pct ?? 0) / 100);
+            const materialTotal = matBase + matMarkup;
+            totalMaterialWithMarkup += materialTotal;
+
+            const labBase = (item.quantity ?? 0) * (item.labor_hours ?? 0) * (item.labor_rate ?? 0);
+            const labMarkup = labBase * ((item.labor_markup_pct ?? 0) / 100);
+            const laborTotal = labBase + labMarkup;
+
             const subtotal = materialTotal + laborTotal;
-            const itemTotal = subtotal * (1 + item.markup_percent / 100);
-            total += itemTotal;
+            const overhead = subtotal * ((item.overhead_pct ?? 0) / 100);
+            const profit = (subtotal + overhead) * ((item.profit_pct ?? 0) / 100);
+            grandTotal += subtotal + overhead + profit;
         });
 
-        db.run('UPDATE projects SET total_amount = ? WHERE id = ?', [total, projectId]);
+        // Apply material tax on aggregate, then contingency
+        const materialTax = totalMaterialWithMarkup * taxRate;
+        grandTotal = (grandTotal + materialTax) * (1 + contingencyPct);
+
+        db.run('UPDATE projects SET total_amount = ? WHERE id = ?', [grandTotal, projectId]);
         await this.save();
 
-        return total;
+        return grandTotal;
     },
 
     // ========== Materials Library ==========
@@ -697,7 +740,11 @@ export const dbService = {
         const sql = `
       UPDATE company_settings 
       SET company_name = ?, address = ?, phone = ?, email = ?, website = ?,
-          default_labor_rate = ?, default_markup_percent = ?, tax_rate = ?, proposal_terms = ?
+          default_labor_rate = ?, default_markup_percent = ?,
+          default_material_markup_pct = ?, default_labor_markup_pct = ?,
+          default_overhead_pct = ?, default_profit_pct = ?,
+          default_material_tax_rate = ?,
+          tax_rate = ?, proposal_terms = ?
       WHERE id = 1
     `;
         db.run(sql, [
@@ -706,9 +753,14 @@ export const dbService = {
             settings.phone || '',
             settings.email || '',
             settings.website || '',
-            settings.default_labor_rate || 75,
-            settings.default_markup_percent || 20,
-            settings.tax_rate || 0,
+            settings.default_labor_rate ?? 75,
+            settings.default_markup_percent ?? 20,
+            settings.default_material_markup_pct ?? 0,
+            settings.default_labor_markup_pct ?? 0,
+            settings.default_overhead_pct ?? 10,
+            settings.default_profit_pct ?? 10,
+            settings.default_material_tax_rate ?? 0,
+            settings.tax_rate ?? 0,
             settings.proposal_terms || ''
         ]);
         await this.save();
@@ -772,6 +824,76 @@ export const dbService = {
             this.save();
         } catch (err) {
             console.error('Migration failed:', err);
+        }
+    },
+
+    migrateGranularPricing() {
+        console.log('Checking for granular pricing schema updates...');
+
+        try {
+            // Migrate line_items
+            const lineInfo = db.exec("PRAGMA table_info(line_items)");
+            const lineColumns = lineInfo[0].values.map(c => c[1]);
+
+            const newLineColumns = [
+                ['material_markup_pct', 'REAL DEFAULT 0'],
+                ['labor_markup_pct', 'REAL DEFAULT 0'],
+                ['overhead_pct', 'REAL DEFAULT 10'],
+                ['profit_pct', 'REAL DEFAULT 10']
+            ];
+
+            newLineColumns.forEach(([col, type]) => {
+                if (!lineColumns.includes(col)) {
+                    console.log(`Adding ${col} to line_items...`);
+                    db.run(`ALTER TABLE line_items ADD COLUMN ${col} ${type}`);
+                }
+            });
+
+            // Migrate old markup_percent → profit_pct for existing data
+            // Only do this once: if profit_pct column was just added and has all defaults
+            if (!lineColumns.includes('profit_pct')) {
+                console.log('Migrating markup_percent → profit_pct for existing line items...');
+                db.run('UPDATE line_items SET profit_pct = markup_percent WHERE markup_percent != 20');
+            }
+
+            // Migrate projects
+            const projInfo = db.exec("PRAGMA table_info(projects)");
+            const projColumns = projInfo[0].values.map(c => c[1]);
+
+            const newProjColumns = [
+                ['material_tax_rate', 'REAL DEFAULT 0'],
+                ['contingency_pct', 'REAL DEFAULT 5']
+            ];
+
+            newProjColumns.forEach(([col, type]) => {
+                if (!projColumns.includes(col)) {
+                    console.log(`Adding ${col} to projects...`);
+                    db.run(`ALTER TABLE projects ADD COLUMN ${col} ${type}`);
+                }
+            });
+
+            // Migrate company_settings
+            const settingsInfo = db.exec("PRAGMA table_info(company_settings)");
+            const settingsColumns = settingsInfo[0].values.map(c => c[1]);
+
+            const newSettingsColumns = [
+                ['default_material_markup_pct', 'REAL DEFAULT 0'],
+                ['default_labor_markup_pct', 'REAL DEFAULT 0'],
+                ['default_overhead_pct', 'REAL DEFAULT 10'],
+                ['default_profit_pct', 'REAL DEFAULT 10'],
+                ['default_material_tax_rate', 'REAL DEFAULT 0']
+            ];
+
+            newSettingsColumns.forEach(([col, type]) => {
+                if (!settingsColumns.includes(col)) {
+                    console.log(`Adding ${col} to company_settings...`);
+                    db.run(`ALTER TABLE company_settings ADD COLUMN ${col} ${type}`);
+                }
+            });
+
+            this.save();
+        } catch (err) {
+            console.error('Granular pricing migration failed:', err);
         }
     }
 };

@@ -31,13 +31,11 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const loadInitialData = async () => {
+  const loadInitialData = () => {
     try {
-      const [projectsResult, categoriesResult, settingsResult] = await Promise.all([
-        Promise.resolve(dbService.getProjects()),
-        Promise.resolve(dbService.getCategories()),
-        Promise.resolve(dbService.getCompanySettings())
-      ]);
+      const projectsResult = dbService.getProjects();
+      const categoriesResult = dbService.getCategories();
+      const settingsResult = dbService.getCompanySettings();
       setProjects(projectsResult || []);
       setCategories(categoriesResult || []);
       setCompanySettings(settingsResult);
@@ -48,12 +46,12 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const refreshProjects = async () => {
+  const refreshProjects = () => {
     const result = dbService.getProjects();
     setProjects(result || []);
   };
 
-  const refreshSettings = async () => {
+  const refreshSettings = () => {
     const result = dbService.getCompanySettings();
     setCompanySettings(result);
   };

@@ -8,6 +8,8 @@ import { FileText, Download, FileType } from 'lucide-react';
 
 function ProposalGenerator({ projectId, projectData, lineItems }) {
   const { companySettings } = useApp();
+  const settings = companySettings || {};
+  const validItems = lineItems.filter(item => !item.isNew && item.description);
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -17,13 +19,13 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
     // Company Header
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(companySettings.company_name || 'WhitTech.AI', 20, yPosition);
+    doc.text(settings.company_name || 'WhitTech.AI', 20, yPosition);
     yPosition += 8;
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    if (companySettings.address) { doc.text(companySettings.address, 20, yPosition); yPosition += 5; }
-    if (companySettings.phone) { doc.text(`Phone: ${companySettings.phone}`, 20, yPosition); yPosition += 5; }
-    if (companySettings.email) { doc.text(`Email: ${companySettings.email}`, 20, yPosition); yPosition += 5; }
+    if (settings.address) { doc.text(settings.address, 20, yPosition); yPosition += 5; }
+    if (settings.phone) { doc.text(`Phone: ${settings.phone}`, 20, yPosition); yPosition += 5; }
+    if (settings.email) { doc.text(`Email: ${settings.email}`, 20, yPosition); yPosition += 5; }
 
     // Proposal Title
     yPosition += 15;
@@ -66,24 +68,28 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
 
     // Line Items Table
     yPosition += 10;
-    const tableData = lineItems.map(item => {
-      const materialTotal = item.quantity * item.material_cost;
-      const laborTotal = item.quantity * item.labor_hours * item.labor_rate;
-      const subtotal = materialTotal + laborTotal;
-      const itemTotal = subtotal * (1 + item.markup_percent / 100);
+    const tableData = validItems.map(item => {
+      const matBase = (item.quantity || 0) * (item.material_cost || 0);
+      const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+      const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+      const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+      const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+      const oh = subtotal * ((item.overhead_pct || 0) / 100);
+      const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+      const itemTotal = subtotal + oh + pft;
       return [
         item.description,
         `${item.quantity} ${item.unit}`,
-        `$${item.material_cost.toFixed(2)}`,
-        `${item.labor_hours} hrs @ $${item.labor_rate.toFixed(2)}`,
-        `${item.markup_percent}%`,
+        `$${(item.material_cost || 0).toFixed(2)}`,
+        `${item.labor_hours || 0} hrs @ $${(item.labor_rate || 0).toFixed(2)}`,
+        `$${(itemTotal / (item.quantity || 1)).toFixed(2)}`,
         `$${itemTotal.toFixed(2)}`
       ];
     });
 
     doc.autoTable({
       startY: yPosition,
-      head: [['Description', 'Quantity', 'Material', 'Labor', 'Markup', 'Total']],
+      head: [['Description', 'Quantity', 'Material', 'Labor', 'Unit Price', 'Total']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
@@ -99,16 +105,23 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
     });
 
     // Calculate totals
+    const taxRate = (projectData?.material_tax_rate || 0) / 100;
+    const contingencyPct = (projectData?.contingency_pct || 0) / 100;
     let materialTotal = 0, laborTotal = 0, grandTotal = 0;
-    lineItems.forEach(item => {
-      const matTotal = item.quantity * item.material_cost;
-      const labTotal = item.quantity * item.labor_hours * item.labor_rate;
-      const subtotal = matTotal + labTotal;
-      const itemTotal = subtotal * (1 + item.markup_percent / 100);
-      materialTotal += matTotal;
-      laborTotal += labTotal;
-      grandTotal += itemTotal;
+    validItems.forEach(item => {
+      const matBase = (item.quantity || 0) * (item.material_cost || 0);
+      const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+      const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+      const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+      const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+      const oh = subtotal * ((item.overhead_pct || 0) / 100);
+      const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+      materialTotal += matBase + matMarkup;
+      laborTotal += labBase + labMarkup;
+      grandTotal += subtotal + oh + pft;
     });
+    const materialTax = materialTotal * taxRate;
+    grandTotal = (grandTotal + materialTax) * (1 + contingencyPct);
 
     // Totals Summary
     const finalY = doc.lastAutoTable.finalY + 10;
@@ -136,7 +149,7 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
     termsY += 8;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    const terms = companySettings.proposal_terms || 'Payment due within 30 days. 50% deposit required to commence work.';
+    const terms = settings.proposal_terms || 'Payment due within 30 days. 50% deposit required to commence work.';
     const splitTerms = doc.splitTextToSize(terms, pageWidth - 40);
     doc.text(splitTerms, 20, termsY);
 
@@ -144,7 +157,7 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
     const footerY = doc.internal.pageSize.getHeight() - 20;
     doc.setFontSize(8);
     doc.setTextColor(128);
-    doc.text(`This estimate is valid for 30 days from date of issue. | ${companySettings.company_name}`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text(`This estimate is valid for 30 days from date of issue. | ${settings.company_name || 'WhitTech.AI'}`, pageWidth / 2, footerY, { align: 'center' });
 
     // Save PDF
     doc.save(`${projectData.project_number}-Estimate.pdf`);
@@ -152,16 +165,23 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
 
   const generateWordDoc = () => {
     // Calculate totals first
+    const taxRate = (projectData?.material_tax_rate || 0) / 100;
+    const contingencyPct = (projectData?.contingency_pct || 0) / 100;
     let materialTotal = 0, laborTotal = 0, grandTotal = 0;
-    lineItems.forEach(item => {
-      const matTotal = item.quantity * item.material_cost;
-      const labTotal = item.quantity * item.labor_hours * item.labor_rate;
-      const subtotal = matTotal + labTotal;
-      const itemTotal = subtotal * (1 + item.markup_percent / 100);
-      materialTotal += matTotal;
-      laborTotal += labTotal;
-      grandTotal += itemTotal;
+    validItems.forEach(item => {
+      const matBase = (item.quantity || 0) * (item.material_cost || 0);
+      const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+      const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+      const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+      const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+      const oh = subtotal * ((item.overhead_pct || 0) / 100);
+      const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+      materialTotal += matBase + matMarkup;
+      laborTotal += labBase + labMarkup;
+      grandTotal += subtotal + oh + pft;
     });
+    const materialTax = materialTotal * taxRate;
+    grandTotal = (grandTotal + materialTax) * (1 + contingencyPct);
 
     const doc = new Document({
       sections: [{
@@ -169,13 +189,13 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
         children: [
           // Company Header
           new Paragraph({
-            text: companySettings.company_name || 'WhitTech.AI',
+            text: settings.company_name || 'WhitTech.AI',
             heading: 'Heading1',
             spacing: { after: 100 }
           }),
-          new Paragraph({ text: companySettings.address || '' }),
-          new Paragraph({ text: companySettings.phone ? `Phone: ${companySettings.phone}` : '' }),
-          new Paragraph({ text: companySettings.email ? `Email: ${companySettings.email}` : '' }),
+          new Paragraph({ text: settings.address || '' }),
+          new Paragraph({ text: settings.phone ? `Phone: ${settings.phone}` : '' }),
+          new Paragraph({ text: settings.email ? `Email: ${settings.email}` : '' }),
           new Paragraph({ text: '' }), // Spacer
 
           // Title
@@ -244,7 +264,7 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
             rows: [
               // Header
               new TableRow({
-                children: ['Description', 'Qty', 'Material', 'Labor', 'Markup', 'Total'].map(text =>
+                children: ['Description', 'Qty', 'Material', 'Labor', 'Unit Price', 'Total'].map(text =>
                   new TableCell({
                     children: [new Paragraph({ children: [new TextRun({ text, bold: true })] })],
                     shading: { fill: "EEEEEE" }
@@ -252,19 +272,23 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
                 )
               }),
               // Items
-              ...lineItems.map(item => {
-                const materialTotal = item.quantity * item.material_cost;
-                const laborTotal = item.quantity * item.labor_hours * item.labor_rate;
-                const subtotal = materialTotal + laborTotal;
-                const itemTotal = subtotal * (1 + item.markup_percent / 100);
+              ...validItems.map(item => {
+                const matBase = (item.quantity || 0) * (item.material_cost || 0);
+                const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+                const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+                const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+                const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+                const oh = subtotal * ((item.overhead_pct || 0) / 100);
+                const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+                const itemTotal = subtotal + oh + pft;
 
                 return new TableRow({
                   children: [
                     new TableCell({ children: [new Paragraph({ text: item.description })] }),
                     new TableCell({ children: [new Paragraph({ text: `${item.quantity} ${item.unit}` })] }),
-                    new TableCell({ children: [new Paragraph({ text: `$${item.material_cost.toFixed(2)}` })] }),
-                    new TableCell({ children: [new Paragraph({ text: `${item.labor_hours} @ $${item.labor_rate}` })] }),
-                    new TableCell({ children: [new Paragraph({ text: `${item.markup_percent}%` })] }),
+                    new TableCell({ children: [new Paragraph({ text: `$${(item.material_cost || 0).toFixed(2)}` })] }),
+                    new TableCell({ children: [new Paragraph({ text: `${item.labor_hours || 0} @ $${item.labor_rate || 0}` })] }),
+                    new TableCell({ children: [new Paragraph({ text: `$${(itemTotal / (item.quantity || 1)).toFixed(2)}` })] }),
                     new TableCell({ children: [new Paragraph({ text: `$${itemTotal.toFixed(2)}` })] }),
                   ]
                 });
@@ -306,11 +330,11 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
             spacing: { before: 800, after: 200 }
           }),
           new Paragraph({
-            text: companySettings.proposal_terms || 'Payment due within 30 days.',
+            text: settings.proposal_terms || 'Payment due within 30 days.',
           }),
 
           new Paragraph({
-            text: `Estimate valid for 30 days. | ${companySettings.company_name}`,
+            text: `Estimate valid for 30 days. | ${settings.company_name || 'WhitTech.AI'}`,
             alignment: AlignmentType.CENTER,
             spacing: { before: 800 },
             color: "888888"
@@ -325,12 +349,22 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
   };
 
   const calculateGrandTotal = () => {
-    return lineItems.reduce((total, item) => {
-      const materialTotal = item.quantity * item.material_cost;
-      const laborTotal = item.quantity * item.labor_hours * item.labor_rate;
-      const subtotal = materialTotal + laborTotal;
-      return total + (subtotal * (1 + item.markup_percent / 100));
-    }, 0);
+    const taxRate = (projectData?.material_tax_rate || 0) / 100;
+    const contingencyPct = (projectData?.contingency_pct || 0) / 100;
+    let materialTotal = 0, grandTotal = 0;
+    validItems.forEach(item => {
+      const matBase = (item.quantity || 0) * (item.material_cost || 0);
+      const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+      const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+      const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+      const subtotal = (matBase + matMarkup) + (labBase + labMarkup);
+      const oh = subtotal * ((item.overhead_pct || 0) / 100);
+      const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+      materialTotal += matBase + matMarkup;
+      grandTotal += subtotal + oh + pft;
+    });
+    const materialTax = materialTotal * taxRate;
+    return (grandTotal + materialTax) * (1 + contingencyPct);
   };
 
   return (
@@ -344,7 +378,7 @@ function ProposalGenerator({ projectId, projectData, lineItems }) {
           <h4>{projectData.name}</h4>
           <p className="preview-client">{projectData.client_name}</p>
           <p className="preview-total">${calculateGrandTotal().toFixed(2)}</p>
-          <p className="preview-items">{lineItems.length} line items</p>
+          <p className="preview-items">{validItems.length} line items</p>
           <div className="button-group" style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
             <button className="btn btn-primary btn-large" onClick={generatePDF}>
               <Download size={20} /> PDF Proposal

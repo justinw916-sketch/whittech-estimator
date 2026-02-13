@@ -10,7 +10,9 @@ function Settings() {
   // Company Settings State
   const [settings, setSettings] = useState({
     company_name: '', address: '', phone: '', email: '', website: '',
-    default_labor_rate: 75, default_markup_percent: 20, tax_rate: 0, proposal_terms: ''
+    default_labor_rate: 75, default_markup_percent: 20, tax_rate: 0, proposal_terms: '',
+    default_material_markup_pct: 0, default_labor_markup_pct: 0,
+    default_overhead_pct: 10, default_profit_pct: 10, default_material_tax_rate: 0
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
@@ -50,7 +52,14 @@ function Settings() {
   // Company Settings Handlers
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setSettings(prev => ({ ...prev, [name]: value }));
+    const numericFields = ['default_labor_rate', 'default_markup_percent', 'tax_rate',
+      'default_material_markup_pct', 'default_labor_markup_pct',
+      'default_overhead_pct', 'default_profit_pct', 'default_material_tax_rate'];
+    if (numericFields.includes(name)) {
+      setSettings(prev => ({ ...prev, [name]: value === '' ? '' : (parseFloat(value) || 0) }));
+    } else {
+      setSettings(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSave = async () => {
@@ -207,8 +216,13 @@ function Settings() {
             <div className="section-header"><DollarSign size={24} /><h3>Default Pricing</h3></div>
             <div className="form-grid">
               <div className="form-group"><label>Default Labor Rate ($/hr)</label><input type="number" name="default_labor_rate" value={settings.default_labor_rate} onChange={handleChange} min="0" step="0.01" /></div>
-              <div className="form-group"><label>Default Markup (%)</label><input type="number" name="default_markup_percent" value={settings.default_markup_percent} onChange={handleChange} min="0" step="1" /></div>
-              <div className="form-group"><label>Tax Rate (%)</label><input type="number" name="tax_rate" value={settings.tax_rate} onChange={handleChange} min="0" step="0.01" /><small>Currently for reference only</small></div>
+              <div className="form-group"><label>Default Markup % (Legacy)</label><input type="number" name="default_markup_percent" value={settings.default_markup_percent} onChange={handleChange} min="0" step="1" /></div>
+              <div className="form-group"><label>Material Markup %</label><input type="number" name="default_material_markup_pct" value={settings.default_material_markup_pct || 0} onChange={handleChange} min="0" step="1" /></div>
+              <div className="form-group"><label>Labor Markup %</label><input type="number" name="default_labor_markup_pct" value={settings.default_labor_markup_pct || 0} onChange={handleChange} min="0" step="1" /></div>
+              <div className="form-group"><label>Overhead %</label><input type="number" name="default_overhead_pct" value={settings.default_overhead_pct ?? 10} onChange={handleChange} min="0" step="1" /></div>
+              <div className="form-group"><label>Profit %</label><input type="number" name="default_profit_pct" value={settings.default_profit_pct ?? 10} onChange={handleChange} min="0" step="1" /></div>
+              <div className="form-group"><label>Default Material Tax Rate %</label><input type="number" name="default_material_tax_rate" value={settings.default_material_tax_rate || 0} onChange={handleChange} min="0" step="0.01" /></div>
+              <div className="form-group"><label>Tax Rate % (Legacy)</label><input type="number" name="tax_rate" value={settings.tax_rate} onChange={handleChange} min="0" step="0.01" /></div>
             </div>
           </div>
           <div className="settings-section">
@@ -318,11 +332,14 @@ function Settings() {
                     <option value="FT">FT</option>
                     <option value="LF">LF</option>
                     <option value="SF">SF</option>
+                    <option value="SY">SY</option>
                     <option value="BOX">BOX</option>
                     <option value="RL">RL</option>
                     <option value="PK">PK</option>
+                    <option value="SPL">SPL</option>
                     <option value="LS">LS</option>
                     <option value="HR">HR</option>
+                    <option value="DAY">DAY</option>
                   </select>
                 </div>
                 <div className="form-group">

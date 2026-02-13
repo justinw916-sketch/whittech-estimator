@@ -52,6 +52,17 @@ function QuickAdd({ isOpen, onClose, onSelectMaterial }) {
         }
     }, [selectedIndex, results]);
 
+    const handleSelect = useCallback((material) => {
+        onSelectMaterial({
+            category: material.category,
+            description: material.item_name,
+            unit: material.unit,
+            material_cost: material.material_cost,
+            labor_hours: material.typical_labor_hours
+        });
+        onClose();
+    }, [onSelectMaterial, onClose]);
+
     const handleKeyDown = useCallback((e) => {
         switch (e.key) {
             case 'ArrowDown':
@@ -75,18 +86,7 @@ function QuickAdd({ isOpen, onClose, onSelectMaterial }) {
             default:
                 break;
         }
-    }, [results, selectedIndex, onClose]);
-
-    const handleSelect = (material) => {
-        onSelectMaterial({
-            category: material.category,
-            description: material.item_name,
-            unit: material.unit,
-            material_cost: material.material_cost,
-            labor_hours: material.typical_labor_hours
-        });
-        onClose();
-    };
+    }, [results, selectedIndex, onClose, handleSelect]);
 
     if (!isOpen) return null;
 

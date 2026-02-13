@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Plus, Trash2, Copy, Search, FileText } from 'lucide-react';
 import QuickAdd from './QuickAdd';
 
-function LineItemTable({ projectId, lineItems, onRefresh }) {
+function LineItemTable({ projectId, lineItems, onRefresh, projectData }) {
   const { categories, companySettings, dbService } = useApp();
   const [rows, setRows] = useState([]);
   const [focusedCell, setFocusedCell] = useState({ row: 0, col: 0 });
@@ -11,6 +11,7 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
   const [quickAddTargetRow, setQuickAddTargetRow] = useState(null);
   const tableRef = useRef(null);
   const inputRefs = useRef({});
+  const updateTimers = useRef({});
 
   const createEmptyRow = useCallback((index) => ({
     id: `temp-${Date.now()}-${index}`,
@@ -23,6 +24,10 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
     labor_hours: 0,
     labor_rate: companySettings?.default_labor_rate || 75,
     markup_percent: companySettings?.default_markup_percent || 20,
+    material_markup_pct: companySettings?.default_material_markup_pct || 0,
+    labor_markup_pct: companySettings?.default_labor_markup_pct || 0,
+    overhead_pct: companySettings?.default_overhead_pct ?? 10,
+    profit_pct: companySettings?.default_profit_pct ?? 10,
     project_id: projectId
   }), [categories, companySettings, projectId]);
 
@@ -41,19 +46,23 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
     { key: 'quantity', label: 'Qty', type: 'number', width: '70px', step: '0.01' },
     { key: 'unit', label: 'Unit', type: 'select', width: '70px' },
     { key: 'material_cost', label: 'Material $', type: 'number', width: '100px', step: '0.01' },
+    { key: 'material_markup_pct', label: 'Mat M%', type: 'number', width: '70px', step: '1' },
     { key: 'labor_hours', label: 'Labor Hrs', type: 'number', width: '90px', step: '0.25' },
     { key: 'labor_rate', label: 'Labor Rate', type: 'number', width: '100px', step: '0.01' },
-    { key: 'markup_percent', label: 'Markup %', type: 'number', width: '90px', step: '1' }
+    { key: 'labor_markup_pct', label: 'Lab M%', type: 'number', width: '70px', step: '1' },
+    { key: 'overhead_pct', label: 'OH %', type: 'number', width: '70px', step: '1' },
+    { key: 'profit_pct', label: 'Profit %', type: 'number', width: '70px', step: '1' }
   ];
 
-  const units = ['EA', 'FT', 'LF', 'SF', 'SY', 'HR', 'DAY', 'LS'];
+  const units = ['EA', 'FT', 'LF', 'SF', 'SY', 'BOX', 'RL', 'PK', 'SPL', 'HR', 'DAY', 'LS'];
 
   const handleCellChange = async (rowIndex, key, value) => {
     const newRows = [...rows];
     const row = newRows[rowIndex];
 
     if (key === 'quantity' || key === 'material_cost' || key === 'labor_hours' ||
-      key === 'labor_rate' || key === 'markup_percent') {
+      key === 'labor_rate' || key === 'markup_percent' || key === 'material_markup_pct' ||
+      key === 'labor_markup_pct' || key === 'overhead_pct' || key === 'profit_pct') {
       value = parseFloat(value) || 0;
     }
 
@@ -73,6 +82,10 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
           labor_hours: row.labor_hours,
           labor_rate: row.labor_rate,
           markup_percent: row.markup_percent,
+          material_markup_pct: row.material_markup_pct,
+          labor_markup_pct: row.labor_markup_pct,
+          overhead_pct: row.overhead_pct,
+          profit_pct: row.profit_pct,
           notes: ''
         });
         if (result.success) {
@@ -85,13 +98,20 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
         console.error('Error auto-saving:', err);
       }
     } else if (!row.isNew) {
-      // Update existing row (debounced would be better, but simple for now)
-      try {
-        await dbService.updateLineItem(row.id, row);
-        onRefresh();
-      } catch (err) {
-        console.error('Error updating:', err);
+      // Debounced update for existing rows
+      const timerId = row.id;
+      if (updateTimers.current[timerId]) {
+        clearTimeout(updateTimers.current[timerId]);
       }
+      updateTimers.current[timerId] = setTimeout(async () => {
+        try {
+          await dbService.updateLineItem(row.id, row);
+          onRefresh();
+        } catch (err) {
+          console.error('Error updating:', err);
+        }
+        delete updateTimers.current[timerId];
+      }, 500);
     }
   };
 
@@ -165,12 +185,42 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
     setRows(newRows);
   };
 
-  const handleDuplicateRow = (rowIndex) => {
+  const handleDuplicateRow = async (rowIndex) => {
     const row = rows[rowIndex];
     const newRow = { ...row, id: `temp-${Date.now()}`, isNew: true };
     const newRows = [...rows];
     newRows.splice(rowIndex + 1, 0, newRow);
     setRows(newRows);
+
+    // Auto-save the duplicate immediately if it has content
+    if (newRow.description && !row.isNew) {
+      try {
+        const result = await dbService.createLineItem({
+          project_id: projectId,
+          category: newRow.category,
+          description: newRow.description,
+          quantity: newRow.quantity,
+          unit: newRow.unit,
+          material_cost: newRow.material_cost,
+          labor_hours: newRow.labor_hours,
+          labor_rate: newRow.labor_rate,
+          markup_percent: newRow.markup_percent,
+          material_markup_pct: newRow.material_markup_pct,
+          labor_markup_pct: newRow.labor_markup_pct,
+          overhead_pct: newRow.overhead_pct,
+          profit_pct: newRow.profit_pct,
+          notes: newRow.notes || ''
+        });
+        if (result.success) {
+          newRow.id = result.lineItem.id;
+          newRow.isNew = false;
+          setRows([...newRows]);
+          onRefresh();
+        }
+      } catch (err) {
+        console.error('Error auto-saving duplicate:', err);
+      }
+    }
   };
 
   const handleAddRows = () => {
@@ -204,6 +254,10 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
           labor_hours: row.labor_hours,
           labor_rate: row.labor_rate,
           markup_percent: row.markup_percent,
+          material_markup_pct: row.material_markup_pct,
+          labor_markup_pct: row.labor_markup_pct,
+          overhead_pct: row.overhead_pct,
+          profit_pct: row.profit_pct,
           notes: ''
         });
         if (result.success) {
@@ -225,7 +279,7 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
     }
 
     // Move to qty field for quick editing
-    setFocusedCell({ row: rowIndex, col: 2 });
+    setFocusedCell({ row: rowIndex, col: 3 });
   };
 
   // Global Ctrl+K handler
@@ -243,22 +297,60 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
   }, [focusedCell.row]);
 
   const calculateItemTotal = (item) => {
-    const materialTotal = (item.quantity || 0) * (item.material_cost || 0);
-    const laborTotal = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+    const matBase = (item.quantity || 0) * (item.material_cost || 0);
+    const matMarkup = matBase * ((item.material_markup_pct || 0) / 100);
+    const materialTotal = matBase + matMarkup;
+
+    const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+    const labMarkup = labBase * ((item.labor_markup_pct || 0) / 100);
+    const laborTotal = labBase + labMarkup;
+
     const subtotal = materialTotal + laborTotal;
-    return subtotal * (1 + (item.markup_percent || 0) / 100);
+    const overhead = subtotal * ((item.overhead_pct || 0) / 100);
+    const profit = (subtotal + overhead) * ((item.profit_pct || 0) / 100);
+    return subtotal + overhead + profit;
   };
 
   const calculateTotals = () => {
-    let materialTotal = 0, laborTotal = 0, grandTotal = 0;
+    const taxRate = (projectData?.material_tax_rate || 0) / 100;
+    const contingencyPct = (projectData?.contingency_pct || 0) / 100;
+    let materialBase = 0, materialMarkup = 0, laborBase = 0, laborMarkup = 0;
+    let overheadTotal = 0, profitTotal = 0, grandTotal = 0;
+
     rows.forEach(item => {
-      if (item.description) { // Only count rows with descriptions
-        materialTotal += (item.quantity || 0) * (item.material_cost || 0);
-        laborTotal += (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
-        grandTotal += calculateItemTotal(item);
+      if (item.description) {
+        const matBase = (item.quantity || 0) * (item.material_cost || 0);
+        const matMkup = matBase * ((item.material_markup_pct || 0) / 100);
+        materialBase += matBase;
+        materialMarkup += matMkup;
+
+        const labBase = (item.quantity || 0) * (item.labor_hours || 0) * (item.labor_rate || 0);
+        const labMkup = labBase * ((item.labor_markup_pct || 0) / 100);
+        laborBase += labBase;
+        laborMarkup += labMkup;
+
+        const subtotal = (matBase + matMkup) + (labBase + labMkup);
+        const oh = subtotal * ((item.overhead_pct || 0) / 100);
+        const pft = (subtotal + oh) * ((item.profit_pct || 0) / 100);
+        overheadTotal += oh;
+        profitTotal += pft;
+        grandTotal += subtotal + oh + pft;
       }
     });
-    return { materialTotal, laborTotal, grandTotal };
+
+    const materialTaxTotal = (materialBase + materialMarkup) * taxRate;
+    const preContingency = grandTotal + materialTaxTotal;
+    const contingencyAmount = preContingency * contingencyPct;
+    const finalTotal = preContingency + contingencyAmount;
+
+    return {
+      materialBase, materialMarkup, materialTaxTotal,
+      laborBase, laborMarkup,
+      overheadTotal, profitTotal,
+      contingencyAmount, contingencyPct: projectData?.contingency_pct || 0,
+      taxRate: projectData?.material_tax_rate || 0,
+      grandTotal: finalTotal
+    };
   };
 
   const totals = calculateTotals();
@@ -389,18 +481,60 @@ function LineItemTable({ projectId, lineItems, onRefresh }) {
           </tbody>
           <tfoot>
             <tr className="totals-row">
-              <td colSpan="5" className="totals-label">Material Total:</td>
-              <td colSpan="4" className="totals-value">{formatCurrency(totals.materialTotal)}</td>
+              <td colSpan="6" className="totals-label">Materials:</td>
+              <td colSpan="7" className="totals-value">{formatCurrency(totals.materialBase)}</td>
               <td colSpan="2"></td>
             </tr>
+            {totals.materialMarkup > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Material Markup:</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.materialMarkup)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
+            {totals.taxRate > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Material Sales Tax ({totals.taxRate}%):</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.materialTaxTotal)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
             <tr className="totals-row">
-              <td colSpan="5" className="totals-label">Labor Total:</td>
-              <td colSpan="4" className="totals-value">{formatCurrency(totals.laborTotal)}</td>
+              <td colSpan="6" className="totals-label">Labor:</td>
+              <td colSpan="7" className="totals-value">{formatCurrency(totals.laborBase)}</td>
               <td colSpan="2"></td>
             </tr>
+            {totals.laborMarkup > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Labor Markup:</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.laborMarkup)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
+            {totals.overheadTotal > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Overhead:</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.overheadTotal)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
+            {totals.profitTotal > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Profit:</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.profitTotal)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
+            {totals.contingencyAmount > 0 && (
+              <tr className="totals-row">
+                <td colSpan="6" className="totals-label">Contingency ({totals.contingencyPct}%):</td>
+                <td colSpan="7" className="totals-value">{formatCurrency(totals.contingencyAmount)}</td>
+                <td colSpan="2"></td>
+              </tr>
+            )}
             <tr className="totals-row grand-total">
-              <td colSpan="5" className="totals-label">GRAND TOTAL:</td>
-              <td colSpan="4" className="totals-value">{formatCurrency(totals.grandTotal)}</td>
+              <td colSpan="6" className="totals-label">GRAND TOTAL:</td>
+              <td colSpan="7" className="totals-value">{formatCurrency(totals.grandTotal)}</td>
               <td colSpan="2"></td>
             </tr>
           </tfoot>

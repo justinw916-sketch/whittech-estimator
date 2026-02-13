@@ -27,6 +27,10 @@ function MaterialSidebar({ isOpen, onClose, onSelectMaterial }) {
         let materials = [];
         if (query.trim()) {
             materials = dbService.searchMaterials(query);
+            // Also filter by category if one is selected
+            if (activeCategory !== 'All') {
+                materials = materials.filter(m => m.category === activeCategory);
+            }
         } else {
             materials = dbService.getMaterialsLibrary(activeCategory === 'All' ? null : activeCategory);
         }
